@@ -11,6 +11,12 @@ class AuthWrapper extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
+        // Add this print statement
+        print('Auth State: ${snapshot.hasData ? 'Logged In' : 'Logged Out'}');
+        if (snapshot.hasData) {
+          print('User ID: ${snapshot.data?.uid}');
+        }
+
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(
@@ -20,7 +26,7 @@ class AuthWrapper extends StatelessWidget {
         }
 
         if (snapshot.hasData) {
-          return const MainScreen();
+          return const MainScreen();  // Make sure this is MainScreen, not HomePage
         }
 
         return const LoginPage();

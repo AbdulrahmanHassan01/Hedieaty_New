@@ -25,30 +25,28 @@ class AuthService {
   Future<UserCredential?> registerWithEmailAndPassword({
     required String email,
     required String password,
-    required String name,  // Add name parameter
+    required String name,
   }) async {
     try {
-      // Create auth user
       final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // Create user document in Firestore
       if (userCredential.user != null) {
         final user = UserModel(
           id: userCredential.user!.uid,
           email: email,
           name: name,
-          phoneNumber: '',  // Can be updated later
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
+          phoneNumber: '',
+          createdAt: Timestamp.now(), // Changed to Timestamp
+          updatedAt: Timestamp.now(), // Changed to Timestamp
         );
 
         await _firestore
             .collection('users')
             .doc(userCredential.user!.uid)
-            .set(user.toFirestore());
+            .set(user.toMap()); // Changed to toMap()
       }
 
       return userCredential;

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../controllers/gift_controller.dart';
 import '../models/gift_model.dart';
 import 'gift_details_page.dart';
+import '../views/widgets/gift_status_chip.dart';
+
 
 class PledgedGiftsPage extends StatefulWidget {
   const PledgedGiftsPage({super.key});
@@ -12,7 +14,7 @@ class PledgedGiftsPage extends StatefulWidget {
 
 class _PledgedGiftsPageState extends State<PledgedGiftsPage> {
   final GiftController _giftController = GiftController();
-  String _sortBy = 'date'; // 'date', 'name', 'price'
+  String _sortBy = 'date';
 
   @override
   Widget build(BuildContext context) {
@@ -34,8 +36,8 @@ class _PledgedGiftsPageState extends State<PledgedGiftsPage> {
                 child: Text('Sort by Date'),
               ),
               const PopupMenuItem(
-                value: 'name',
-                child: Text('Sort by Name'),
+                value: 'status',
+                child: Text('Sort by Status'),
               ),
               const PopupMenuItem(
                 value: 'price',
@@ -61,32 +63,17 @@ class _PledgedGiftsPageState extends State<PledgedGiftsPage> {
           // Sort gifts
           switch (_sortBy) {
             case 'date':
-              gifts.sort((a, b) =>
-                  (b.pledgedAt ?? DateTime.now())
-                      .compareTo(a.pledgedAt ?? DateTime.now()));
-            case 'name':
-              gifts.sort((a, b) => a.name.compareTo(b.name));
+              gifts.sort((a, b) => (b.pledgedAt ?? DateTime.now())
+                  .compareTo(a.pledgedAt ?? DateTime.now()));
+            case 'status':
+              gifts.sort((a, b) => a.status.index.compareTo(b.status.index));
             case 'price':
               gifts.sort((a, b) => b.price.compareTo(a.price));
           }
 
           if (gifts.isEmpty) {
             return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.card_giftcard_outlined,
-                    size: 64,
-                    color: Colors.grey,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'You haven\'t pledged any gifts yet',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ],
-              ),
+              child: Text('No pledged gifts yet'),
             );
           }
 
@@ -95,171 +82,64 @@ class _PledgedGiftsPageState extends State<PledgedGiftsPage> {
             itemCount: gifts.length,
             itemBuilder: (context, index) {
               final gift = gifts[index];
-              return _PledgedGiftCard(
-                gift: gift,
-                onUnpledge: () async {
-                  try {
-                    await _giftController.unpledgeGift(gift.id);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Gift unpledged successfully'),
+              return Card(
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GiftDetailsPage(
+                          eventId: gift.eventId,
+                          eventName: 'Pledged Gift', // You might want to fetch the actual event name
+                          gift: gift,
                         ),
-                      );
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(e.toString()),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
-                onViewDetails: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => GiftDetailsPage(
-                        eventId: gift.eventId,
-                        eventName: 'Event', // TODO: Get actual event name
-                        gift: gift,
                       ),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    gift.name,
+                                    style: Theme.of(context).textTheme.titleLarge,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '\$${gift.price.toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                      color: Theme.of(context).colorScheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            GiftStatusChip(status: gift.status),
+                          ],
+                        ),
+                        if (gift.pledgedAt != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Pledged on: ${_formatDate(gift.pledgedAt!)}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
                     ),
-                  );
-                },
+                  ),
+                ),
               );
             },
           );
         },
-      ),
-    );
-  }
-}
-
-class _PledgedGiftCard extends StatelessWidget {
-  final GiftModel gift;
-  final VoidCallback onUnpledge;
-  final VoidCallback onViewDetails;
-
-  const _PledgedGiftCard({
-    required this.gift,
-    required this.onUnpledge,
-    required this.onViewDetails,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
-        onTap: onViewDetails,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Gift Image
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(12),
-                  image: gift.imageUrl != null
-                      ? DecorationImage(
-                    image: NetworkImage(gift.imageUrl!),
-                    fit: BoxFit.cover,
-                  )
-                      : null,
-                ),
-                child: gift.imageUrl == null
-                    ? Icon(Icons.card_giftcard,
-                    size: 32,
-                    color: Colors.grey[400])
-                    : null,
-              ),
-              const SizedBox(width: 16),
-
-              // Gift Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      gift.name,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      gift.description,
-                      style: TextStyle(color: Colors.grey[600]),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            gift.category,
-                            style: TextStyle(
-                              color: Colors.grey[700],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '\$${gift.price.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        if (gift.pledgedAt != null)
-                          Text(
-                            'Pledged on ${_formatDate(gift.pledgedAt!)}',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          ),
-                        const Spacer(),
-                        TextButton.icon(
-                          onPressed: onUnpledge,
-                          icon: const Icon(Icons.remove_circle_outline),
-                          label: const Text('Unpledge'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.red,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

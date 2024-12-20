@@ -5,24 +5,21 @@ class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _collection = 'users';
 
-  // Create/Update user
   Future<void> saveUser(UserModel user) async {
     await _firestore.collection(_collection).doc(user.id).set(
-      user.toFirestore(),
+      user.toMap(), // Changed to toMap()
       SetOptions(merge: true),
     );
   }
 
-  // Get user by ID
   Future<UserModel?> getUserById(String userId) async {
     final doc = await _firestore.collection(_collection).doc(userId).get();
-    if (doc.exists) {
+    if (doc.exists && doc.data() != null) {
       return UserModel.fromFirestore(doc.data()!, doc.id);
     }
     return null;
   }
 
-  // Get user by email
   Future<UserModel?> getUserByEmail(String email) async {
     final snapshot = await _firestore
         .collection(_collection)

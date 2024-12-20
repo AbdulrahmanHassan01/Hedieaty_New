@@ -75,30 +75,32 @@ class GiftService {
   }
 
   // Pledge gift
-  Future<void> pledgeGift(String giftId, String userId) async {
+  Future<void> updateGiftStatus(String giftId, {
+    required GiftStatus newStatus,
+    String? pledgedByUserId,
+    DateTime? pledgedAt,
+  }) async {
     try {
-      await _firestore.collection(_collection).doc(giftId).update({
-        'status': GiftStatus.pledged.toString(),
-        'pledgedByUserId': userId,
-        'pledgedAt': FieldValue.serverTimestamp(),
+      final updates = <String, dynamic>{
+        'status': newStatus.toString(),
         'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      throw 'Failed to pledge gift: ${e.toString()}';
-    }
-  }
+      };
 
-  // Unpledge gift
-  Future<void> unpledgeGift(String giftId) async {
-    try {
-      await _firestore.collection(_collection).doc(giftId).update({
-        'status': GiftStatus.available.toString(),
-        'pledgedByUserId': null,
-        'pledgedAt': null,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      // Add pledge info if provided
+      if (pledgedByUserId != null) {
+        updates['pledgedByUserId'] = pledgedByUserId;
+        updates['pledgedAt'] = pledgedAt ?? FieldValue.serverTimestamp();
+      }
+
+      // Remove pledge info if unpledging
+      if (newStatus == GiftStatus.available) {
+        updates['pledgedByUserId'] = FieldValue.delete();
+        updates['pledgedAt'] = FieldValue.delete();
+      }
+
+      await _firestore.collection(_collection).doc(giftId).update(updates);
     } catch (e) {
-      throw 'Failed to unpledge gift: ${e.toString()}';
+      throw 'Failed to update gift status: ${e.toString()}';
     }
   }
 }

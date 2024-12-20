@@ -26,7 +26,7 @@ class GiftController {
     if (userId == null) throw 'User not authenticated';
 
     final gift = GiftModel(
-      id: '',  // Will be set by Firestore
+      id: '',
       name: name,
       description: description,
       category: category,
@@ -120,50 +120,23 @@ class GiftController {
     }
   }
 
-  // Pledge gift
   Future<void> pledgeGift(String giftId) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) throw 'User not authenticated';
 
-    try {
-      final gift = await _giftService.getGiftById(giftId);
-      if (gift == null) throw 'Gift not found';
-
-      if (gift.status == GiftStatus.pledged) {
-        throw 'Gift is already pledged';
-      }
-
-      if (gift.userId == userId) {
-        throw 'Cannot pledge your own gift';
-      }
-
-      await _giftService.pledgeGift(giftId, userId);
-    } catch (e) {
-      throw 'Failed to pledge gift: ${e.toString()}';
-    }
+    await _giftService.updateGiftStatus(
+      giftId,
+      newStatus: GiftStatus.pledged,
+      pledgedByUserId: userId,
+    );
   }
 
   // Unpledge gift
   Future<void> unpledgeGift(String giftId) async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) throw 'User not authenticated';
-
-    try {
-      final gift = await _giftService.getGiftById(giftId);
-      if (gift == null) throw 'Gift not found';
-
-      if (gift.status != GiftStatus.pledged) {
-        throw 'Gift is not pledged';
-      }
-
-      if (gift.pledgedByUserId != userId) {
-        throw 'Not authorized to unpledge this gift';
-      }
-
-      await _giftService.unpledgeGift(giftId);
-    } catch (e) {
-      throw 'Failed to unpledge gift: ${e.toString()}';
-    }
+    await _giftService.updateGiftStatus(
+      giftId,
+      newStatus: GiftStatus.available,
+    );
   }
 
   // Get pledged gifts
@@ -171,5 +144,12 @@ class GiftController {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) throw 'User not authenticated';
     return _giftService.getUserPledgedGifts(userId);
+  }
+
+  Future<void> markGiftAsPurchased(String giftId) async {
+    await _giftService.updateGiftStatus(
+      giftId,
+      newStatus: GiftStatus.purchased,
+    );
   }
 }
