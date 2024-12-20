@@ -3,6 +3,9 @@ import '../controllers/friend_controller.dart';
 import '../models/user_model.dart';
 import 'event_list_page.dart';
 import 'friend_event_list_page.dart';
+import '../views/widgets/notification_padge.dart';
+import 'notification_page.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -90,6 +93,28 @@ class _HomePageState extends State<HomePage> {
         centerTitle: true,
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
+        actions: [
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationsPage(),
+                    ),
+                  );
+                },
+              ),
+              const Positioned(
+                right: 8,
+                top: 8,
+                child: NotificationBadge(),
+              ),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [

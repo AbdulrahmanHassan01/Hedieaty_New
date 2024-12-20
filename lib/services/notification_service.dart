@@ -7,9 +7,7 @@ class NotificationService {
 
   // Create notification
   Future<void> createNotification(NotificationModel notification) async {
-    await _firestore.collection(_collection).add(
-      notification.toFirestore(),
-    );
+    await _firestore.collection(_collection).add(notification.toFirestore());
   }
 
   // Get user's notifications
@@ -24,13 +22,21 @@ class NotificationService {
         .toList());
   }
 
-  // Delete old notifications
+  // Mark notification as read
+  Future<void> markAsRead(String notificationId) async {
+    await _firestore
+        .collection(_collection)
+        .doc(notificationId)
+        .update({'isRead': true});
+  }
+
+  // Delete old notifications (cleanup)
   Future<void> deleteOldNotifications(String userId) async {
     final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
     final snapshot = await _firestore
         .collection(_collection)
         .where('userId', isEqualTo: userId)
-        .where('createdAt', isLessThan: thirtyDaysAgo.toIso8601String())
+        .where('createdAt', isLessThan: Timestamp.fromDate(thirtyDaysAgo))
         .get();
 
     for (var doc in snapshot.docs) {

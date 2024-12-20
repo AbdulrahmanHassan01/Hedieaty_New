@@ -1,12 +1,18 @@
-enum NotificationType { giftPledged }  // Removed friendRequest
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+enum NotificationType {
+  giftPledged,
+  giftUnpledged,
+  giftPurchased,
+}
 
 class NotificationModel {
   final String id;
-  final String userId;      // recipient
-  final String senderId;    // sender
+  final String userId;  // recipient
+  final String senderId;  // who triggered the notification
+  final String giftId;
+  final String giftName;
   final NotificationType type;
-  final String? giftId;
-  final String? eventId;
   final bool isRead;
   final DateTime createdAt;
 
@@ -14,36 +20,35 @@ class NotificationModel {
     required this.id,
     required this.userId,
     required this.senderId,
+    required this.giftId,
+    required this.giftName,
     required this.type,
-    this.giftId,
-    this.eventId,
-    required this.isRead,
+    this.isRead = false,
     required this.createdAt,
   });
 
   Map<String, dynamic> toFirestore() => {
     'userId': userId,
     'senderId': senderId,
-    'type': type.toString(),
     'giftId': giftId,
-    'eventId': eventId,
+    'giftName': giftName,
+    'type': type.toString(),
     'isRead': isRead,
-    'createdAt': createdAt.toIso8601String(),
+    'createdAt': Timestamp.fromDate(createdAt),
   };
 
   factory NotificationModel.fromFirestore(Map<String, dynamic> data, String id) {
     return NotificationModel(
       id: id,
-      userId: data['userId'] ?? '',
-      senderId: data['senderId'] ?? '',
+      userId: data['userId'],
+      senderId: data['senderId'],
+      giftId: data['giftId'],
+      giftName: data['giftName'],
       type: NotificationType.values.firstWhere(
             (e) => e.toString() == data['type'],
-        orElse: () => NotificationType.giftPledged,
       ),
-      giftId: data['giftId'],
-      eventId: data['eventId'],
       isRead: data['isRead'] ?? false,
-      createdAt: DateTime.parse(data['createdAt']),
+      createdAt: (data['createdAt'] as Timestamp).toDate(),
     );
   }
 }
