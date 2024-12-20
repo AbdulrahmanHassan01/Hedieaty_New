@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:hedieaty_new/views/widgets/notification_dialog.dart';
 import '../controllers/friend_controller.dart';
+import '../controllers/notification_controller.dart';
 import '../models/user_model.dart';
 import 'event_list_page.dart';
 import 'friend_event_list_page.dart';
@@ -24,6 +26,41 @@ class _HomePageState extends State<HomePage> {
     _searchController.dispose();
     super.dispose();
   }
+
+  @override
+  void initState() {
+    super.initState();
+    // Show notifications after the build is complete
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showUnreadNotifications();
+    });
+  }
+
+  Future<void> _showUnreadNotifications() async {
+    if (!mounted) return;
+
+    final notifications = await NotificationController()
+        .getNotifications()
+        .first;
+
+    final unreadNotifications = notifications.where((n) => !n.isRead).toList();
+
+    if (unreadNotifications.isEmpty) return;
+
+    // Show notifications one by one
+    for (var notification in unreadNotifications) {
+      if (!mounted) return;
+
+      await showDialog(
+        context: context,
+        builder: (context) => NotificationDialog(notification: notification),
+      );
+
+      // Mark as read after showing
+      await NotificationController().markAsRead(notification.id);
+    }
+  }
+
 
   void _showAddFriendDialog(BuildContext context) {
     final emailController = TextEditingController();
