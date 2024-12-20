@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import '../models/gift_model.dart';
+import '../models/event_model.dart';
 import '../controllers/gift_controller.dart';
+import 'widgets/gift_card.dart';
 import 'addGift_page.dart';
 import 'gift_details_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class GiftListPage extends StatefulWidget {
   final String eventId;
   final String eventName;
+  final EventStatus eventStatus;
 
   const GiftListPage({
     super.key,
     required this.eventId,
     required this.eventName,
+    required this.eventStatus,
   });
 
   @override
@@ -20,10 +25,118 @@ class GiftListPage extends StatefulWidget {
 
 class _GiftListPageState extends State<GiftListPage> {
   final GiftController _giftController = GiftController();
-  String _sortBy = 'name'; // 'name', 'category', 'price'
+  String _sortBy = 'name';
+
+  void _showEditGiftDialog(GiftModel gift) {
+    final nameController = TextEditingController(text: gift.name);
+    final descriptionController = TextEditingController(text: gift.description);
+    final priceController = TextEditingController(text: gift.price.toString());
+    String selectedCategory = gift.category;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Gift'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Gift Name',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: selectedCategory,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                ),
+                items: [
+                  'Electronics',
+                  'Books',
+                  'Clothing',
+                  'Kitchen',
+                  'Home',
+                  'Sports',
+                  'Toys',
+                  'Other',
+                ].map((category) {
+                  return DropdownMenuItem(
+                    value: category,
+                    child: Text(category),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    selectedCategory = value;
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: priceController,
+                decoration: const InputDecoration(
+                  labelText: 'Price (\$)',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                await _giftController.editGift(
+                  giftId: gift.id,
+                  name: nameController.text.trim(),
+                  description: descriptionController.text.trim(),
+                  category: selectedCategory,
+                  price: double.parse(priceController.text),
+                );
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Gift updated successfully')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(e.toString()),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final isUpcomingEvent = widget.eventStatus == EventStatus.upcoming;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.eventName} Gifts'),
@@ -65,6 +178,11 @@ class _GiftListPageState extends State<GiftListPage> {
           }
 
           final gifts = snapshot.data ?? [];
+          if (gifts.isEmpty) {
+            return const Center(
+              child: Text('No gifts found. Add some!'),
+            );
+          }
 
           // Sort gifts
           switch (_sortBy) {
@@ -76,25 +194,32 @@ class _GiftListPageState extends State<GiftListPage> {
               gifts.sort((a, b) => a.price.compareTo(b.price));
           }
 
-          if (gifts.isEmpty) {
-            return const Center(
-              child: Text('No gifts found. Add some!'),
-            );
-          }
-
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: gifts.length,
             itemBuilder: (context, index) {
               final gift = gifts[index];
+              final isOwner = gift.userId == currentUserId;
+              final canEdit = isOwner && isUpcomingEvent;
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _GiftCard(
+                child: GiftCard(
                   gift: gift,
-                  onEdit: () async {
-                    // TODO: Navigate to edit gift page
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GiftDetailsPage(
+                          eventId: widget.eventId,
+                          eventName: widget.eventName,
+                          gift: gift,
+                        ),
+                      ),
+                    );
                   },
-                  onDelete: () async {
+                  onEdit: canEdit ? () => _showEditGiftDialog(gift) : null,
+                  onDelete: canEdit ? () async {
                     try {
                       await _giftController.deleteGift(gift.id);
                       if (mounted) {
@@ -105,30 +230,22 @@ class _GiftListPageState extends State<GiftListPage> {
                     } catch (e) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e')),
+                          SnackBar(
+                            content: Text(e.toString()),
+                            backgroundColor: Colors.red,
+                          ),
                         );
                       }
                     }
-                  },
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => GiftDetailsPage(
-                          eventId: widget.eventId,  // Pass eventId
-                          eventName: widget.eventName,  // Pass eventName
-                          gift: gift,
-                        ),
-                      ),
-                    );
-                  },
+                  } : null,
                 ),
               );
             },
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: isUpcomingEvent
+          ? FloatingActionButton.extended(
         onPressed: () {
           Navigator.push(
             context,
@@ -142,218 +259,8 @@ class _GiftListPageState extends State<GiftListPage> {
         },
         icon: const Icon(Icons.add),
         label: const Text('Add Gift'),
-      ),
-    );
-  }
-}
-
-class _GiftCard extends StatelessWidget {
-  final GiftModel gift;
-  final VoidCallback onTap;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
-
-  const _GiftCard({
-    required this.gift,
-    required this.onTap,
-    this.onEdit,
-    this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Gift Image or Placeholder
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(12),
-                  image: gift.imageUrl != null
-                      ? DecorationImage(
-                    image: NetworkImage(gift.imageUrl!),
-                    fit: BoxFit.cover,
-                  )
-                      : null,
-                ),
-                child: gift.imageUrl == null
-                    ? Icon(Icons.card_giftcard,
-                    size: 40,
-                    color: Colors.grey[400])
-                    : null,
-              ),
-              const SizedBox(width: 16),
-
-              // Gift Details
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      gift.name,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      gift.description,
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            gift.category,
-                            style: TextStyle(
-                              color: Colors.grey[700],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          '\$${gift.price.toStringAsFixed(2)}',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: gift.status == GiftStatus.pledged
-                                ? Colors.green.withOpacity(0.1)
-                                : Colors.blue.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                gift.status == GiftStatus.pledged
-                                    ? Icons.check_circle
-                                    : Icons.card_giftcard,
-                                size: 16,
-                                color: gift.status == GiftStatus.pledged
-                                    ? Colors.green
-                                    : Colors.blue,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                gift.status == GiftStatus.pledged
-                                    ? 'Pledged'
-                                    : 'Available',
-                                style: TextStyle(
-                                  color: gift.status == GiftStatus.pledged
-                                      ? Colors.green
-                                      : Colors.blue,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (gift.status == GiftStatus.available &&
-                            (onEdit != null || onDelete != null))
-                          PopupMenuButton<String>(
-                            itemBuilder: (context) => [
-                              if (onEdit != null)
-                                const PopupMenuItem(
-                                  value: 'edit',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.edit),
-                                      SizedBox(width: 8),
-                                      Text('Edit'),
-                                    ],
-                                  ),
-                                ),
-                              if (onDelete != null)
-                                const PopupMenuItem(
-                                  value: 'delete',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.delete),
-                                      SizedBox(width: 8),
-                                      Text('Delete'),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                            onSelected: (value) {
-                              switch (value) {
-                                case 'edit':
-                                  onEdit?.call();
-                                case 'delete':
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) => AlertDialog(
-                                      title: const Text('Delete Gift'),
-                                      content: const Text(
-                                          'Are you sure you want to delete this gift?'
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context),
-                                          child: const Text('Cancel'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () {
-                                            Navigator.pop(context);
-                                            onDelete?.call();
-                                          },
-                                          child: const Text(
-                                            'Delete',
-                                            style: TextStyle(color: Colors.red),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                              }
-                            },
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      )
+          : null,
     );
   }
 }

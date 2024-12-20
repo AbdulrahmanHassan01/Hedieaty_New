@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../controllers/gift_controller.dart';
+import '../models/gift_model.dart';
 
 class AddGiftPage extends StatefulWidget {
   final String eventId;
   final String eventName;
+  final GiftModel? giftToEdit;
 
   const AddGiftPage({
     super.key,
     required this.eventId,
     required this.eventName,
+    this.giftToEdit,
   });
 
   @override

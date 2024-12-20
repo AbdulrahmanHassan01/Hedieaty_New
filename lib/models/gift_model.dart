@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum GiftStatus { available, pledged }
+enum GiftStatus { available, pledged, purchased }
 
 class GiftModel {
   final String id;

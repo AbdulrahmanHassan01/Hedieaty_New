@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../controllers/event_controller.dart';
 import '../models/event_model.dart';
 import 'gift_list_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class EventListPage extends StatefulWidget {
   const EventListPage({super.key});
@@ -12,10 +13,9 @@ class EventListPage extends StatefulWidget {
 
 class _EventListPageState extends State<EventListPage> {
   final EventController _eventController = EventController();
-  String _sortBy = 'date'; // 'date', 'name', 'category'
+  String _sortBy = 'date';
 
   void _showCreateEventDialog() {
-    // Hold form data
     final nameController = TextEditingController();
     final categoryController = TextEditingController();
     final descriptionController = TextEditingController();
@@ -51,24 +51,27 @@ class _EventListPageState extends State<EventListPage> {
                 maxLines: 3,
               ),
               const SizedBox(height: 16),
-              ListTile(
-                title: const Text('Event Date'),
-                subtitle: Text(
-                  selectedDate.toString().split(' ')[0],
+              StatefulBuilder(
+                builder: (context, setState) => ListTile(
+                  title: const Text('Event Date'),
+                  subtitle: Text(
+                    '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                  ),
+                  trailing: const Icon(Icons.calendar_today),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        selectedDate = picked;
+                      });
+                    }
+                  },
                 ),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: selectedDate,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (picked != null) {
-                    setState(() {
-                      selectedDate = picked;
-                    });
-                  }
-                },
               ),
             ],
           ),
@@ -80,28 +83,153 @@ class _EventListPageState extends State<EventListPage> {
           ),
           TextButton(
             onPressed: () async {
+              if (nameController.text.isEmpty ||
+                  categoryController.text.isEmpty ||
+                  descriptionController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please fill in all fields'),
+                  ),
+                );
+                return;
+              }
+
               try {
                 await _eventController.createEvent(
-                  name: nameController.text,
-                  category: categoryController.text,
+                  name: nameController.text.trim(),
+                  category: categoryController.text.trim(),
                   date: selectedDate,
-                  description: descriptionController.text,
+                  description: descriptionController.text.trim(),
                 );
                 if (mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Event created successfully!')),
+                    const SnackBar(content: Text('Event created successfully')),
                   );
                 }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
+                    SnackBar(
+                      content: Text(e.toString()),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                 }
               }
             },
             child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditEventDialog(EventModel event) {
+    final nameController = TextEditingController(text: event.name);
+    final categoryController = TextEditingController(text: event.category);
+    final descriptionController = TextEditingController(text: event.description);
+    DateTime selectedDate = event.date;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Event'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Event Name',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: categoryController,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: descriptionController,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              StatefulBuilder(
+                builder: (context, setState) => ListTile(
+                  title: const Text('Event Date'),
+                  subtitle: Text(
+                    '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                  ),
+                  trailing: const Icon(Icons.calendar_today),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        selectedDate = picked;
+                      });
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (nameController.text.isEmpty ||
+                  categoryController.text.isEmpty ||
+                  descriptionController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please fill in all fields'),
+                  ),
+                );
+                return;
+              }
+
+              try {
+                await _eventController.editEvent(
+                  eventId: event.id,
+                  name: nameController.text.trim(),
+                  category: categoryController.text.trim(),
+                  date: selectedDate,
+                  description: descriptionController.text.trim(),
+                );
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Event updated successfully')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(e.toString()),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Update'),
           ),
         ],
       ),
@@ -175,26 +303,41 @@ class _EventListPageState extends State<EventListPage> {
               final event = events[index];
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: EventCard(
+                child: _EventCard(
                   event: event,
-                  onEdit: () {
-                    // TODO: Implement edit functionality
-                  },
+                  onEdit: event.status == EventStatus.upcoming
+                      ? () => _showEditEventDialog(event)
+                      : null,
                   onDelete: () async {
                     try {
                       await _eventController.deleteEvent(event.id);
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Event deleted successfully!')),
+                          const SnackBar(content: Text('Event deleted successfully')),
                         );
                       }
                     } catch (e) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e')),
+                          SnackBar(
+                            content: Text(e.toString()),
+                            backgroundColor: Colors.red,
+                          ),
                         );
                       }
                     }
+                  },
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GiftListPage(
+                          eventId: event.id,
+                          eventName: event.name,
+                          eventStatus: event.status,
+                        ),
+                      ),
+                    );
                   },
                 ),
               );
@@ -211,34 +354,25 @@ class _EventListPageState extends State<EventListPage> {
   }
 }
 
-// Extract EventCard to a separate widget
-class EventCard extends StatelessWidget {
+class _EventCard extends StatelessWidget {
   final EventModel event;
-  final VoidCallback onEdit;
+  final VoidCallback? onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onTap;
 
-  const EventCard({
-    super.key,
+  const _EventCard({
     required this.event,
-    required this.onEdit,
+    this.onEdit,
     required this.onDelete,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => GiftListPage(
-                eventId: event.id,
-                eventName: event.name,
-              ),
-            ),
-          );
-        },
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -267,16 +401,17 @@ class EventCard extends StatelessWidget {
                   ),
                   PopupMenuButton<String>(
                     itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit),
-                            SizedBox(width: 8),
-                            Text('Edit'),
-                          ],
+                      if (onEdit != null)
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit),
+                              SizedBox(width: 8),
+                              Text('Edit'),
+                            ],
+                          ),
                         ),
-                      ),
                       const PopupMenuItem(
                         value: 'delete',
                         child: Row(
@@ -289,34 +424,35 @@ class EventCard extends StatelessWidget {
                       ),
                     ],
                     onSelected: (value) {
-                      if (value == 'edit') {
-                        onEdit();
-                      } else if (value == 'delete') {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Delete Event'),
-                            content: const Text(
-                                'Are you sure you want to delete this event?'
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Cancel'),
+                      switch (value) {
+                        case 'edit':
+                          onEdit?.call();
+                        case 'delete':
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Delete Event'),
+                              content: const Text(
+                                  'Are you sure you want to delete this event?'
                               ),
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  onDelete();
-                                },
-                                child: const Text(
-                                  'Delete',
-                                  style: TextStyle(color: Colors.red),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Cancel'),
                                 ),
-                              ),
-                            ],
-                          ),
-                        );
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    onDelete();
+                                  },
+                                  child: const Text(
+                                    'Delete',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
                       }
                     },
                   ),
@@ -332,7 +468,7 @@ class EventCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    event.date.toString().split(' ')[0],
+                    '${event.date.day}/${event.date.month}/${event.date.year}',
                     style: TextStyle(color: Colors.grey[600]),
                   ),
                   const Spacer(),

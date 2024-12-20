@@ -1,9 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/gift_model.dart';
+import '../models/event_model.dart';
 import '../services/gift_service.dart';
+import '../services/event_service.dart';
 
 class GiftController {
   final GiftService _giftService = GiftService();
+  final EventService _eventService = EventService();
 
   // Get gifts for an event
   Stream<List<GiftModel>> getEventGifts(String eventId) {
@@ -44,27 +47,32 @@ class GiftController {
   }
 
   // Update gift
-  Future<void> updateGift({
+  Future<void> editGift({
     required String giftId,
     required String name,
     required String description,
     required String category,
     required double price,
-    String? imageUrl,
   }) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) throw 'User not authenticated';
 
     try {
-      final existingGift = await _giftService.getGiftById(giftId);
-      if (existingGift == null) throw 'Gift not found';
+      final gift = await _giftService.getGiftById(giftId);
+      if (gift == null) throw 'Gift not found';
 
-      if (existingGift.userId != userId) {
-        throw 'Not authorized to update this gift';
+      // Check ownership
+      if (gift.userId != userId) {
+        throw 'Not authorized to edit this gift';
       }
 
-      if (existingGift.status == GiftStatus.pledged) {
-        throw 'Cannot modify a pledged gift';
+      // Get event to check status
+      final event = await _eventService.getEventById(gift.eventId);
+      if (event == null) throw 'Event not found';
+
+      // Only allow editing gifts in upcoming events
+      if (event.status != EventStatus.upcoming) {
+        throw 'Can only edit gifts in upcoming events';
       }
 
       final updatedGift = GiftModel(
@@ -73,13 +81,13 @@ class GiftController {
         description: description,
         category: category,
         price: price,
-        eventId: existingGift.eventId,
+        eventId: gift.eventId,
         userId: userId,
-        imageUrl: imageUrl,
-        status: existingGift.status,
-        pledgedByUserId: existingGift.pledgedByUserId,
-        pledgedAt: existingGift.pledgedAt,
-        createdAt: existingGift.createdAt,
+        imageUrl: gift.imageUrl,
+        status: gift.status,
+        pledgedByUserId: gift.pledgedByUserId,
+        pledgedAt: gift.pledgedAt,
+        createdAt: gift.createdAt,
         updatedAt: DateTime.now(),
       );
 

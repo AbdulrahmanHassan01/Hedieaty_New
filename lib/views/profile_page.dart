@@ -201,6 +201,7 @@ class ProfilePage extends StatelessWidget {
                                     builder: (context) => GiftListPage(
                                       eventId: event.id,
                                       eventName: event.name,
+                                      eventStatus: event.status,
                                     ),
                                   ),
                                 );

@@ -47,7 +47,7 @@ class EventController {
   }
 
   // Update event
-  Future<void> updateEvent({
+  Future<void> editEvent({
     required String eventId,
     required String name,
     required String category,
@@ -61,9 +61,13 @@ class EventController {
       final existingEvent = await _eventService.getEventById(eventId);
       if (existingEvent == null) throw 'Event not found';
 
-      // Verify ownership
       if (existingEvent.userId != userId) {
-        throw 'Not authorized to update this event';
+        throw 'Not authorized to edit this event';
+      }
+
+      // Check if event is upcoming
+      if (existingEvent.status != EventStatus.upcoming) {
+        throw 'Only upcoming events can be edited';
       }
 
       final updatedEvent = EventModel(
