@@ -12,6 +12,7 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();  // Add name controller
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -24,6 +25,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   void dispose() {
+    _nameController.dispose();  // Dispose name controller
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -41,6 +43,7 @@ class _RegisterPageState extends State<RegisterPage> {
         await _authService.registerWithEmailAndPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text,
+          name: _nameController.text.trim(),  // Add name
         );
         // Navigation will be handled by auth state listener
       } catch (e) {
@@ -90,6 +93,24 @@ class _RegisterPageState extends State<RegisterPage> {
                     ],
                   ),
                 ),
+
+              // Add Name Field
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Full Name',
+                  prefixIcon: Icon(Icons.person),
+                ),
+                textCapitalization: TextCapitalization.words,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your name';
+                  }
+                  return null;
+                },
+                enabled: !_isLoading,
+              ),
+              const SizedBox(height: 16),
 
               TextFormField(
                 controller: _emailController,

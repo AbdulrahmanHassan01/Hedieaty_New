@@ -1,21 +1,43 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/friend_model.dart';
+import '../models/user_model.dart';
 
 class FriendService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String _collection = 'friends';
+
+  // Get all friends with their user details
+  Stream<List<UserModel>> getFriends(String userId) {
+    return _firestore
+        .collection('friends')
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .asyncMap((snapshot) async {
+      final friendIds = snapshot.docs.map((doc) => doc['friendId'] as String).toList();
+      if (friendIds.isEmpty) return [];
+
+      final userDocs = await _firestore
+          .collection('users')
+          .where(FieldPath.documentId, whereIn: friendIds)
+          .get();
+
+      return userDocs.docs
+          .map((doc) => UserModel.fromFirestore(doc.data(), doc.id))
+          .toList();
+    });
+  }
 
   // Add friend
-  Future<void> addFriend(FriendModel friend) async {
-    await _firestore.collection(_collection).add(
-      friend.toFirestore(),
-    );
+  Future<void> addFriend(String userId, String friendId) async {
+    await _firestore.collection('friends').add({
+      'userId': userId,
+      'friendId': friendId,
+      'addedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   // Remove friend
   Future<void> removeFriend(String userId, String friendId) async {
     final snapshot = await _firestore
-        .collection(_collection)
+        .collection('friends')
         .where('userId', isEqualTo: userId)
         .where('friendId', isEqualTo: friendId)
         .get();
@@ -25,14 +47,14 @@ class FriendService {
     }
   }
 
-  // Get user's friends
-  Stream<List<String>> getUserFriendIds(String userId) {
-    return _firestore
-        .collection(_collection)
+  // Check if friendship exists
+  Future<bool> checkFriendship(String userId, String friendId) async {
+    final snapshot = await _firestore
+        .collection('friends')
         .where('userId', isEqualTo: userId)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => doc.data()['friendId'] as String)
-        .toList());
+        .where('friendId', isEqualTo: friendId)
+        .get();
+
+    return snapshot.docs.isNotEmpty;
   }
 }

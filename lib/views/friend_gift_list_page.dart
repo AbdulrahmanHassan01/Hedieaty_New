@@ -1,34 +1,19 @@
-// views/friend_gift_list_page.dart
 import 'package:flutter/material.dart';
+import '../controllers/gift_controller.dart';
+import '../models/gift_model.dart';
 import 'gift_details_page.dart';
 
-class FriendGift {
-  final String id;
-  final String name;
-  final String description;
-  final String category;
-  final double price;
-  final bool isPledged;
-  final String? imageUrl;
-
-  FriendGift({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.category,
-    required this.price,
-    this.isPledged = false,
-    this.imageUrl,
-  });
-}
-
 class FriendGiftListPage extends StatefulWidget {
+  final String friendId;
   final String friendName;
+  final String eventId;
   final String eventName;
 
   const FriendGiftListPage({
     super.key,
+    required this.friendId,
     required this.friendName,
+    required this.eventId,
     required this.eventName,
   });
 
@@ -37,35 +22,8 @@ class FriendGiftListPage extends StatefulWidget {
 }
 
 class _FriendGiftListPageState extends State<FriendGiftListPage> {
+  final GiftController _giftController = GiftController();
   String _sortBy = 'name';
-
-  // Mock data
-  final List<FriendGift> _mockGifts = [
-    FriendGift(
-      id: '1',
-      name: 'PlayStation 5',
-      description: 'Gaming console with extra controller',
-      category: 'Electronics',
-      price: 499.99,
-      isPledged: true,
-    ),
-    FriendGift(
-      id: '2',
-      name: 'Nike Running Shoes',
-      description: 'Size 42, Black color',
-      category: 'Sports',
-      price: 129.99,
-      isPledged: false,
-    ),
-    FriendGift(
-      id: '3',
-      name: 'Harry Potter Collection',
-      description: 'Complete book series, hardcover',
-      category: 'Books',
-      price: 199.99,
-      isPledged: false,
-    ),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -90,10 +48,7 @@ class _FriendGiftListPageState extends State<FriendGiftListPage> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.sort),
             onSelected: (value) {
-              setState(() {
-                _sortBy = value;
-                _sortGifts();
-              });
+              setState(() => _sortBy = value);
             },
             itemBuilder: (context) => [
               const PopupMenuItem(
@@ -112,53 +67,72 @@ class _FriendGiftListPageState extends State<FriendGiftListPage> {
           ),
         ],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _mockGifts.length,
-        itemBuilder: (context, index) {
-          final gift = _mockGifts[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _GiftCard(
-              gift: gift,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => GiftDetailsPage(
-                      friendName: widget.friendName,
-                      eventName: widget.eventName,
-                      gift: gift,
-                    ),
-                  ),
-                );
-              },
-            ),
+      body: StreamBuilder<List<GiftModel>>(
+        stream: _giftController.getEventGifts(widget.eventId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final gifts = snapshot.data ?? [];
+
+          // Sort gifts
+          switch (_sortBy) {
+            case 'name':
+              gifts.sort((a, b) => a.name.compareTo(b.name));
+            case 'category':
+              gifts.sort((a, b) => a.category.compareTo(b.category));
+            case 'price':
+              gifts.sort((a, b) => a.price.compareTo(b.price));
+          }
+
+          if (gifts.isEmpty) {
+            return const Center(
+              child: Text('No gifts found'),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: gifts.length,
+            itemBuilder: (context, index) {
+              final gift = gifts[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: GiftCard(
+                  gift: gift,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GiftDetailsPage(
+                          eventId: widget.eventId,
+                          eventName: widget.eventName,
+                          gift: gift,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
           );
         },
       ),
     );
   }
-
-  void _sortGifts() {
-    setState(() {
-      switch (_sortBy) {
-        case 'name':
-          _mockGifts.sort((a, b) => a.name.compareTo(b.name));
-        case 'category':
-          _mockGifts.sort((a, b) => a.category.compareTo(b.category));
-        case 'price':
-          _mockGifts.sort((a, b) => a.price.compareTo(b.price));
-      }
-    });
-  }
 }
 
-class _GiftCard extends StatelessWidget {
-  final FriendGift gift;
+class GiftCard extends StatelessWidget {
+  final GiftModel gift;
   final VoidCallback onTap;
 
-  const _GiftCard({
+  const GiftCard({
+    super.key,
     required this.gift,
     required this.onTap,
   });
@@ -247,46 +221,44 @@ class _GiftCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: gift.status == GiftStatus.pledged
+                            ? Colors.green.withOpacity(0.1)
+                            : Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            gift.status == GiftStatus.pledged
+                                ? Icons.check_circle
+                                : Icons.card_giftcard,
+                            size: 16,
+                            color: gift.status == GiftStatus.pledged
+                                ? Colors.green
+                                : Colors.blue,
                           ),
-                          decoration: BoxDecoration(
-                            color: gift.isPledged
-                                ? Colors.green.withOpacity(0.1)
-                                : Colors.blue.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
+                          const SizedBox(width: 4),
+                          Text(
+                            gift.status == GiftStatus.pledged
+                                ? 'Pledged'
+                                : 'Available',
+                            style: TextStyle(
+                              color: gift.status == GiftStatus.pledged
+                                  ? Colors.green
+                                  : Colors.blue,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                gift.isPledged
-                                    ? Icons.check_circle
-                                    : Icons.card_giftcard,
-                                size: 16,
-                                color: gift.isPledged
-                                    ? Colors.green
-                                    : Colors.blue,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                gift.isPledged ? 'Pledged' : 'Available',
-                                style: TextStyle(
-                                  color: gift.isPledged
-                                      ? Colors.green
-                                      : Colors.blue,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),

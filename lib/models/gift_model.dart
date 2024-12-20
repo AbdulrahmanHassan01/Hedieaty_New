@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 enum GiftStatus { available, pledged }
 
 class GiftModel {
@@ -7,7 +9,7 @@ class GiftModel {
   final String category;
   final double price;
   final String eventId;
-  final String userId; // owner of the gift
+  final String userId;
   final String? imageUrl;
   final GiftStatus status;
   final String? pledgedByUserId;
@@ -41,9 +43,9 @@ class GiftModel {
     'imageUrl': imageUrl,
     'status': status.toString(),
     'pledgedByUserId': pledgedByUserId,
-    'pledgedAt': pledgedAt?.toIso8601String(),
-    'createdAt': createdAt.toIso8601String(),
-    'updatedAt': updatedAt.toIso8601String(),
+    'pledgedAt': pledgedAt != null ? Timestamp.fromDate(pledgedAt!) : null,
+    'createdAt': Timestamp.fromDate(createdAt),
+    'updatedAt': Timestamp.fromDate(updatedAt),
   };
 
   factory GiftModel.fromFirestore(Map<String, dynamic> data, String id) {
@@ -62,10 +64,10 @@ class GiftModel {
       ),
       pledgedByUserId: data['pledgedByUserId'],
       pledgedAt: data['pledgedAt'] != null
-          ? DateTime.parse(data['pledgedAt'])
+          ? (data['pledgedAt'] as Timestamp).toDate()
           : null,
-      createdAt: DateTime.parse(data['createdAt']),
-      updatedAt: DateTime.parse(data['updatedAt']),
+      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      updatedAt: (data['updatedAt'] as Timestamp).toDate(),
     );
   }
 }

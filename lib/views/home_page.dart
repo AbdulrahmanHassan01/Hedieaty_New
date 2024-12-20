@@ -1,9 +1,86 @@
 import 'package:flutter/material.dart';
+import '../controllers/friend_controller.dart';
+import '../models/user_model.dart';
 import 'event_list_page.dart';
 import 'friend_event_list_page.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final FriendController _friendController = FriendController();
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _showAddFriendDialog(BuildContext context) {
+    final emailController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Friend'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter your friend\'s email address to add them to your friends list.',
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailController,
+              decoration: const InputDecoration(
+                labelText: 'Friend\'s Email',
+                prefixIcon: Icon(Icons.email),
+              ),
+              keyboardType: TextInputType.emailAddress,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                await _friendController.addFriendByEmail(
+                  emailController.text.trim(),
+                );
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Friend added successfully')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(e.toString()),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +97,7 @@ class HomePage extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: TextField(
+              controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search friends',
                 prefixIcon: const Icon(Icons.search),
@@ -29,38 +107,63 @@ class HomePage extends StatelessWidget {
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
               ),
               onChanged: (value) {
-                // TODO: Implement search
+                setState(() {
+                  _searchQuery = value.toLowerCase();
+                });
               },
             ),
           ),
 
           // Friends Grid
           Expanded(
-            child: // In home_page.dart, update the GridView.builder section:
+            child: StreamBuilder<List<UserModel>>(
+              stream: _friendController.getFriends(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-            GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 200,
-                childAspectRatio: 0.8,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: 10,
-              itemBuilder: (context, index) {
-                return _FriendCard(
-                  name: 'Friend ${index + 1}',
-                  eventCount: index % 3,
-                  imageUrl: null,
-                  onTap: () {
-                    // Navigate to FriendEventListPage when a friend card is tapped
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => FriendEventListPage(
-                          friendName: 'Friend ${index + 1}',
-                        ),
-                      ),
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
+
+                final friends = snapshot.data ?? [];
+                final filteredFriends = friends
+                    .where((friend) =>
+                friend.name.toLowerCase().contains(_searchQuery) ||
+                    friend.email.toLowerCase().contains(_searchQuery))
+                    .toList();
+
+                if (filteredFriends.isEmpty) {
+                  return const Center(
+                    child: Text('No friends found'),
+                  );
+                }
+
+                return GridView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 200,
+                    childAspectRatio: 0.8,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: filteredFriends.length,
+                  itemBuilder: (context, index) {
+                    final friend = filteredFriends[index];
+                    return _FriendCard(
+                      friend: friend,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => FriendEventListPage(
+                              friendId: friend.id,
+                              friendName: friend.name,
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 );
@@ -77,7 +180,6 @@ class HomePage extends StatelessWidget {
             FloatingActionButton.extended(
               heroTag: 'createEvent',
               onPressed: () {
-                // Navigate to EventListPage when Create Event is pressed
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -90,9 +192,7 @@ class HomePage extends StatelessWidget {
             ),
             FloatingActionButton(
               heroTag: 'addFriend',
-              onPressed: () {
-                // TODO: Implement add friend
-              },
+              onPressed: () => _showAddFriendDialog(context),
               child: const Icon(Icons.person_add),
             ),
           ],
@@ -103,16 +203,12 @@ class HomePage extends StatelessWidget {
 }
 
 class _FriendCard extends StatelessWidget {
-  final String name;
-  final int eventCount;
-  final String? imageUrl;
+  final UserModel friend;
   final VoidCallback onTap;
 
   const _FriendCard({
-    required this.name,
-    required this.eventCount,
+    required this.friend,
     required this.onTap,
-    this.imageUrl,
   });
 
   @override
@@ -122,30 +218,25 @@ class _FriendCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Profile Picture
               CircleAvatar(
                 radius: 30,
                 backgroundColor: Theme.of(context).colorScheme.primary,
-                backgroundImage: imageUrl != null ? NetworkImage(imageUrl!) : null,
-                child: imageUrl == null
-                    ? Text(
-                  name[0].toUpperCase(),
+                child: Text(
+                  friend.name[0].toUpperCase(),
                   style: const TextStyle(
                     fontSize: 24,
                     color: Colors.white,
                   ),
-                )
-                    : null,
+                ),
               ),
               const SizedBox(height: 12),
 
-              // Name
               Text(
-                name,
+                friend.name,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -155,29 +246,14 @@ class _FriendCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              // Event Count
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
+              Text(
+                friend.email,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.grey[600],
                 ),
-                decoration: BoxDecoration(
-                  color: eventCount > 0
-                      ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
-                      : Colors.grey.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  eventCount == 0
-                      ? 'No Events'
-                      : '$eventCount Events',
-                  style: TextStyle(
-                    color: eventCount > 0
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

@@ -1,31 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'gift_list_page.dart';
+import '../controllers/gift_controller.dart';
 
-class GiftDetailsPage extends StatefulWidget {
-  final Gift? gift; // If null, we're creating a new gift
+class AddGiftPage extends StatefulWidget {
+  final String eventId;
   final String eventName;
 
-  const GiftDetailsPage({
+  const AddGiftPage({
     super.key,
-    this.gift,
+    required this.eventId,
     required this.eventName,
   });
 
   @override
-  State<GiftDetailsPage> createState() => _GiftDetailsPageState();
+  State<AddGiftPage> createState() => _AddGiftPageState();
 }
 
-class _GiftDetailsPageState extends State<GiftDetailsPage> {
+class _AddGiftPageState extends State<AddGiftPage> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _priceController = TextEditingController();
+  String _selectedCategory = 'Other';
 
-  late final TextEditingController _nameController;
-  late final TextEditingController _descriptionController;
-  late final TextEditingController _priceController;
+  final _giftController = GiftController();
+  bool _isLoading = false;
+  String? _errorMessage;
 
-  String _selectedCategory = 'Electronics'; // Default category
-  String? _imageUrl;
-
+  // Predefined categories
   final List<String> _categories = [
     'Electronics',
     'Books',
@@ -38,22 +40,6 @@ class _GiftDetailsPageState extends State<GiftDetailsPage> {
   ];
 
   @override
-  void initState() {
-    super.initState();
-    // Initialize controllers with existing gift data if editing
-    _nameController = TextEditingController(text: widget.gift?.name);
-    _descriptionController = TextEditingController(text: widget.gift?.description);
-    _priceController = TextEditingController(
-      text: widget.gift?.price.toStringAsFixed(2),
-    );
-
-    if (widget.gift != null) {
-      _selectedCategory = widget.gift!.category;
-      _imageUrl = widget.gift?.imageUrl;
-    }
-  }
-
-  @override
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
@@ -61,197 +47,178 @@ class _GiftDetailsPageState extends State<GiftDetailsPage> {
     super.dispose();
   }
 
+  Future<void> _saveGift() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      try {
+        await _giftController.createGift(
+          eventId: widget.eventId,
+          name: _nameController.text.trim(),
+          description: _descriptionController.text.trim(),
+          category: _selectedCategory,
+          price: double.parse(_priceController.text),
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Gift added successfully')),
+          );
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        setState(() {
+          _errorMessage = e.toString();
+        });
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.gift != null;
-    final isPledged = isEditing && widget.gift!.status == GiftStatus.pledged;
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEditing ? 'Edit Gift' : 'New Gift'),
+        title: Text('Add Gift to ${widget.eventName}'),
         centerTitle: true,
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
+      body: SingleChildScrollView(
+        child: Padding(
           padding: const EdgeInsets.all(16),
-          children: [
-            if (isPledged)
-              Container(
-                padding: const EdgeInsets.all(16),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline,
-                        color: Colors.orange.shade700),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'This gift has been pledged and cannot be modified.',
-                        style: TextStyle(color: Colors.orange.shade900),
-                      ),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_errorMessage != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade100),
                     ),
-                  ],
-                ),
-              ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red.shade700),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: TextStyle(color: Colors.red.shade700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
-            // Image Section
-            GestureDetector(
-              onTap: isPledged ? null : () {
-                // TODO: Implement image picking
-              },
-              child: Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(12),
-                  image: _imageUrl != null
-                      ? DecorationImage(
-                    image: NetworkImage(_imageUrl!),
-                    fit: BoxFit.cover,
+                // Name Field
+                TextFormField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Gift Name',
+                    prefixIcon: Icon(Icons.card_giftcard),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a gift name';
+                    }
+                    return null;
+                  },
+                  enabled: !_isLoading,
+                ),
+                const SizedBox(height: 16),
+
+                // Description Field
+                TextFormField(
+                  controller: _descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    prefixIcon: Icon(Icons.description),
+                    alignLabelWithHint: true,
+                  ),
+                  maxLines: 3,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a description';
+                    }
+                    return null;
+                  },
+                  enabled: !_isLoading,
+                ),
+                const SizedBox(height: 16),
+
+                // Category Dropdown
+                DropdownButtonFormField<String>(
+                  value: _selectedCategory,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    prefixIcon: Icon(Icons.category),
+                  ),
+                  items: _categories.map((category) {
+                    return DropdownMenuItem(
+                      value: category,
+                      child: Text(category),
+                    );
+                  }).toList(),
+                  onChanged: _isLoading ? null : (value) {
+                    if (value != null) {
+                      setState(() => _selectedCategory = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Price Field
+                TextFormField(
+                  controller: _priceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Price (\$)',
+                    prefixIcon: Icon(Icons.attach_money),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                  ],
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a price';
+                    }
+                    final price = double.tryParse(value);
+                    if (price == null || price <= 0) {
+                      return 'Please enter a valid price';
+                    }
+                    return null;
+                  },
+                  enabled: !_isLoading,
+                ),
+                const SizedBox(height: 24),
+
+                // Submit Button
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _saveGift,
+                  child: _isLoading
+                      ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                      : null,
+                      : const Text('Add Gift'),
                 ),
-                child: _imageUrl == null
-                    ? Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.add_a_photo,
-                      size: 40,
-                      color: Colors.grey[400],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Add Photo',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                )
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Name Field
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Gift Name',
-                prefixIcon: Icon(Icons.card_giftcard),
-              ),
-              enabled: !isPledged,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter a name';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Description Field
-            TextFormField(
-              controller: _descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Description',
-                prefixIcon: Icon(Icons.description),
-                alignLabelWithHint: true,
-              ),
-              enabled: !isPledged,
-              maxLines: 3,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter a description';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Category Dropdown
-            DropdownButtonFormField<String>(
-              value: _selectedCategory,
-              decoration: const InputDecoration(
-                labelText: 'Category',
-                prefixIcon: Icon(Icons.category),
-              ),
-              items: _categories.map((category) {
-                return DropdownMenuItem(
-                  value: category,
-                  child: Text(category),
-                );
-              }).toList(),
-              onChanged: isPledged ? null : (value) {
-                if (value != null) {
-                  setState(() => _selectedCategory = value);
-                }
-              },
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please select a category';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Price Field
-            TextFormField(
-              controller: _priceController,
-              decoration: const InputDecoration(
-                labelText: 'Price',
-                prefixIcon: Icon(Icons.attach_money),
-              ),
-              enabled: !isPledged,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
               ],
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter a price';
-                }
-                if (double.tryParse(value) == null) {
-                  return 'Please enter a valid price';
-                }
-                return null;
-              },
             ),
-            const SizedBox(height: 24),
-
-            // Save Button
-            if (!isPledged)
-              ElevatedButton(
-                onPressed: _saveGift,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.all(16),
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                ),
-                child: Text(isEditing ? 'Update Gift' : 'Add Gift'),
-              ),
-          ],
+          ),
         ),
       ),
     );
-  }
-
-  void _saveGift() {
-    if (_formKey.currentState!.validate()) {
-      // TODO: Save gift data
-      // For now, just pop back
-      Navigator.pop(context);
-    }
   }
 }

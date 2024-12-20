@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import '../controllers/event_controller.dart';
+import '../models/event_model.dart';
 import 'friend_gift_list_page.dart';
-import 'gift_details_page.dart';
 
 class FriendEventListPage extends StatefulWidget {
-  final String friendName; // Pass friend's name to show in AppBar
+  final String friendId;
+  final String friendName;
 
   const FriendEventListPage({
     super.key,
+    required this.friendId,
     required this.friendName,
   });
 
@@ -15,8 +18,8 @@ class FriendEventListPage extends StatefulWidget {
 }
 
 class _FriendEventListPageState extends State<FriendEventListPage> {
-  String _sortBy = 'name';
-  // Use the same Event class as EventListPage
+  final EventController _eventController = EventController();
+  String _sortBy = 'date';
 
   @override
   Widget build(BuildContext context) {
@@ -31,9 +34,12 @@ class _FriendEventListPageState extends State<FriendEventListPage> {
             icon: const Icon(Icons.sort),
             onSelected: (value) {
               setState(() => _sortBy = value);
-              // TODO: Implement sorting
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'date',
+                child: Text('Sort by Date'),
+              ),
               const PopupMenuItem(
                 value: 'name',
                 child: Text('Sort by Name'),
@@ -42,64 +48,64 @@ class _FriendEventListPageState extends State<FriendEventListPage> {
                 value: 'category',
                 child: Text('Sort by Category'),
               ),
-              const PopupMenuItem(
-                value: 'status',
-                child: Text('Sort by Status'),
-              ),
             ],
           ),
         ],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: 3, // Mock data
-        itemBuilder: (context, index) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Card(
-              child: InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => FriendGiftListPage(
-                        friendName: widget.friendName,
-                        eventName: 'Event ${index + 1}',
-                      ),
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Event ${index + 1}',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+      body: StreamBuilder<List<EventModel>>(
+        stream: _eventController.getFriendEvents(widget.friendId),  // Use getFriendEvents instead
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final events = snapshot.data ?? [];
+
+          // Sort events
+          switch (_sortBy) {
+            case 'name':
+              events.sort((a, b) => a.name.compareTo(b.name));
+            case 'category':
+              events.sort((a, b) => a.category.compareTo(b.category));
+            case 'date':
+              events.sort((a, b) => a.date.compareTo(b.date));
+          }
+
+          if (events.isEmpty) {
+            return const Center(
+              child: Text('No events found'),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: events.length,
+            itemBuilder: (context, index) {
+              final event = events[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _EventCard(
+                  event: event,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => FriendGiftListPage(
+                          friendId: widget.friendId,
+                          friendName: widget.friendName,
+                          eventId: event.id,
+                          eventName: event.name,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.event,
-                            size: 16,
-                            color: Colors.grey[600],
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Coming up in ${index + 1} days',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
-              ),
-            ),
+              );
+            },
           );
         },
       ),
@@ -107,128 +113,68 @@ class _FriendEventListPageState extends State<FriendEventListPage> {
   }
 }
 
-// views/friend_gift_list_page.dart
-class FriendGiftListPage extends StatefulWidget {
-  final String friendName;
-  final String eventName;
+class _EventCard extends StatelessWidget {
+  final EventModel event;
+  final VoidCallback onTap;
 
-  const FriendGiftListPage({
-    super.key,
-    required this.friendName,
-    required this.eventName,
+  const _EventCard({
+    required this.event,
+    required this.onTap,
   });
 
   @override
-  State<FriendGiftListPage> createState() => _FriendGiftListPageState();
-}
-
-class _FriendGiftListPageState extends State<FriendGiftListPage> {
-  String _sortBy = 'name';
-
-  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("${widget.friendName}'s Gifts"),
-        centerTitle: true,
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
-        actions: [
-          // Sorting menu same as before
-        ],
-      ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: 5, // Mock data
-        itemBuilder: (context, index) {
-          final bool isPledged = index % 2 == 0;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Card(
-              child: InkWell(
-                onTap: () {
-                  // Create a mock gift for demonstration
-                  final mockGift = FriendGift(
-                    id: 'gift-${index + 1}',
-                    name: 'Gift ${index + 1}',
-                    description: 'This is a description for Gift ${index + 1}',
-                    category: 'Category ${index + 1}',
-                    price: 99.99 * (index + 1),
-                    isPledged: index % 2 == 0, // Alternate between pledged and unpledged
-                  );
-
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => GiftDetailsPage(
-                        friendName: widget.friendName,
-                        eventName: 'Event ${index + 1}',
-                        gift: mockGift,  // Pass the mock gift
-                      ),
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Gift ${index + 1}',
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Category ${index + 1}',
-                                  style: TextStyle(color: Colors.grey[600]),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isPledged
-                                  ? Colors.green.withOpacity(0.1)
-                                  : Colors.blue.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              isPledged ? 'Pledged' : 'Available',
-                              style: TextStyle(
-                                color: isPledged ? Colors.green : Colors.blue,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '\$${(99.99 * (index + 1)).toStringAsFixed(2)}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                event.name,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
-          );
-        },
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      event.category,
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    Icons.event,
+                    size: 16,
+                    color: Colors.grey[600],
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${event.date.day}/${event.date.month}/${event.date.year}',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

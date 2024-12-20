@@ -1,24 +1,7 @@
 import 'package:flutter/material.dart';
-
-class PledgedGift {
-  final String id;
-  final String giftName;
-  final String friendName;
-  final String eventName;
-  final DateTime dueDate;
-  final double price;
-  final bool isPending; // true if still pending, false if already purchased
-
-  PledgedGift({
-    required this.id,
-    required this.giftName,
-    required this.friendName,
-    required this.eventName,
-    required this.dueDate,
-    required this.price,
-    required this.isPending,
-  });
-}
+import '../controllers/gift_controller.dart';
+import '../models/gift_model.dart';
+import 'gift_details_page.dart';
 
 class PledgedGiftsPage extends StatefulWidget {
   const PledgedGiftsPage({super.key});
@@ -28,36 +11,8 @@ class PledgedGiftsPage extends StatefulWidget {
 }
 
 class _PledgedGiftsPageState extends State<PledgedGiftsPage> {
-  // Mock data
-  final List<PledgedGift> _mockPledgedGifts = [
-    PledgedGift(
-      id: '1',
-      giftName: 'PlayStation 5',
-      friendName: 'John Smith',
-      eventName: 'Birthday Party',
-      dueDate: DateTime.now().add(const Duration(days: 5)),
-      price: 499.99,
-      isPending: true,
-    ),
-    PledgedGift(
-      id: '2',
-      giftName: 'Air Fryer',
-      friendName: 'Sarah Johnson',
-      eventName: 'House Warming',
-      dueDate: DateTime.now().add(const Duration(days: 15)),
-      price: 119.99,
-      isPending: true,
-    ),
-    PledgedGift(
-      id: '3',
-      giftName: 'Book Collection',
-      friendName: 'Mike Wilson',
-      eventName: 'Graduation',
-      dueDate: DateTime.now().subtract(const Duration(days: 2)),
-      price: 89.99,
-      isPending: false,
-    ),
-  ];
+  final GiftController _giftController = GiftController();
+  String _sortBy = 'date'; // 'date', 'name', 'price'
 
   @override
   Widget build(BuildContext context) {
@@ -67,35 +22,116 @@ class _PledgedGiftsPageState extends State<PledgedGiftsPage> {
         centerTitle: true,
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sort),
+            onSelected: (value) {
+              setState(() => _sortBy = value);
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'date',
+                child: Text('Sort by Date'),
+              ),
+              const PopupMenuItem(
+                value: 'name',
+                child: Text('Sort by Name'),
+              ),
+              const PopupMenuItem(
+                value: 'price',
+                child: Text('Sort by Price'),
+              ),
+            ],
+          ),
+        ],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _mockPledgedGifts.length,
-        itemBuilder: (context, index) {
-          final gift = _mockPledgedGifts[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _PledgedGiftCard(
-              gift: gift,
-              onMarkPurchased: gift.isPending ? () {
-                setState(() {
-                  _mockPledgedGifts[index] = PledgedGift(
-                    id: gift.id,
-                    giftName: gift.giftName,
-                    friendName: gift.friendName,
-                    eventName: gift.eventName,
-                    dueDate: gift.dueDate,
-                    price: gift.price,
-                    isPending: false,
+      body: StreamBuilder<List<GiftModel>>(
+        stream: _giftController.getUserPledgedGifts(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final gifts = snapshot.data ?? [];
+
+          // Sort gifts
+          switch (_sortBy) {
+            case 'date':
+              gifts.sort((a, b) =>
+                  (b.pledgedAt ?? DateTime.now())
+                      .compareTo(a.pledgedAt ?? DateTime.now()));
+            case 'name':
+              gifts.sort((a, b) => a.name.compareTo(b.name));
+            case 'price':
+              gifts.sort((a, b) => b.price.compareTo(a.price));
+          }
+
+          if (gifts.isEmpty) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.card_giftcard_outlined,
+                    size: 64,
+                    color: Colors.grey,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'You haven\'t pledged any gifts yet',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: gifts.length,
+            itemBuilder: (context, index) {
+              final gift = gifts[index];
+              return _PledgedGiftCard(
+                gift: gift,
+                onUnpledge: () async {
+                  try {
+                    await _giftController.unpledgeGift(gift.id);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Gift unpledged successfully'),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(e.toString()),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+                onViewDetails: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => GiftDetailsPage(
+                        eventId: gift.eventId,
+                        eventName: 'Event', // TODO: Get actual event name
+                        gift: gift,
+                      ),
+                    ),
                   );
-                });
-              } : null,
-              onCancelPledge: gift.isPending ? () {
-                setState(() {
-                  _mockPledgedGifts.removeAt(index);
-                });
-              } : null,
-            ),
+                },
+              );
+            },
           );
         },
       ),
@@ -104,127 +140,125 @@ class _PledgedGiftsPageState extends State<PledgedGiftsPage> {
 }
 
 class _PledgedGiftCard extends StatelessWidget {
-  final PledgedGift gift;
-  final VoidCallback? onMarkPurchased;
-  final VoidCallback? onCancelPledge;
+  final GiftModel gift;
+  final VoidCallback onUnpledge;
+  final VoidCallback onViewDetails;
 
   const _PledgedGiftCard({
     required this.gift,
-    this.onMarkPurchased,
-    this.onCancelPledge,
+    required this.onUnpledge,
+    required this.onViewDetails,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bool isOverdue = gift.isPending && gift.dueDate.isBefore(DateTime.now());
-
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        gift.giftName,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: onViewDetails,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Gift Image
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(12),
+                  image: gift.imageUrl != null
+                      ? DecorationImage(
+                    image: NetworkImage(gift.imageUrl!),
+                    fit: BoxFit.cover,
+                  )
+                      : null,
+                ),
+                child: gift.imageUrl == null
+                    ? Icon(Icons.card_giftcard,
+                    size: 32,
+                    color: Colors.grey[400])
+                    : null,
+              ),
+              const SizedBox(width: 16),
+
+              // Gift Details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      gift.name,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'For ${gift.friendName}',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  '\$${gift.price.toStringAsFixed(2)}',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              gift.eventName,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(
-                  Icons.calendar_today,
-                  size: 16,
-                  color: isOverdue ? Colors.red : Colors.grey[600],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Due ${_formatDate(gift.dueDate)}',
-                  style: TextStyle(
-                    color: isOverdue ? Colors.red : Colors.grey[600],
-                    fontWeight: isOverdue ? FontWeight.bold : null,
-                  ),
-                ),
-                const Spacer(),
-                if (gift.isPending) ...[
-                  TextButton.icon(
-                    onPressed: onMarkPurchased,
-                    icon: const Icon(Icons.check_circle_outline),
-                    label: const Text('Mark Purchased'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.green,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: onCancelPledge,
-                    icon: const Icon(Icons.cancel_outlined),
-                    label: const Text('Cancel'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.red,
+                    const SizedBox(height: 4),
+                    Text(
+                      gift.description,
+                      style: TextStyle(color: Colors.grey[600]),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ] else
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                    const SizedBox(height: 8),
+                    Row(
                       children: [
-                        Icon(Icons.check_circle,
-                            size: 16,
-                            color: Colors.green[700]),
-                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            gift.category,
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
                         Text(
-                          'Purchased',
+                          '\$${gift.price.toStringAsFixed(2)}',
                           style: TextStyle(
-                            color: Colors.green[700],
-                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
                     ),
-                  ),
-              ],
-            ),
-          ],
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        if (gift.pledgedAt != null)
+                          Text(
+                            'Pledged on ${_formatDate(gift.pledgedAt!)}',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: onUnpledge,
+                          icon: const Icon(Icons.remove_circle_outline),
+                          label: const Text('Unpledge'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

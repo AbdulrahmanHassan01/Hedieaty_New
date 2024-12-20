@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 enum EventStatus { upcoming, current, past }
 
 class EventModel {
@@ -6,7 +8,7 @@ class EventModel {
   final String category;
   final DateTime date;
   final String description;
-  final String userId; // owner of the event
+  final String userId;
   final EventStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -26,12 +28,12 @@ class EventModel {
   Map<String, dynamic> toFirestore() => {
     'name': name,
     'category': category,
-    'date': date.toIso8601String(),
+    'date': Timestamp.fromDate(date),
     'description': description,
     'userId': userId,
     'status': status.toString(),
-    'createdAt': createdAt.toIso8601String(),
-    'updatedAt': updatedAt.toIso8601String(),
+    'createdAt': Timestamp.fromDate(createdAt),
+    'updatedAt': Timestamp.fromDate(updatedAt),
   };
 
   factory EventModel.fromFirestore(Map<String, dynamic> data, String id) {
@@ -39,15 +41,15 @@ class EventModel {
       id: id,
       name: data['name'] ?? '',
       category: data['category'] ?? '',
-      date: DateTime.parse(data['date']),
+      date: (data['date'] as Timestamp).toDate(),
       description: data['description'] ?? '',
       userId: data['userId'] ?? '',
       status: EventStatus.values.firstWhere(
             (e) => e.toString() == data['status'],
         orElse: () => EventStatus.upcoming,
       ),
-      createdAt: DateTime.parse(data['createdAt']),
-      updatedAt: DateTime.parse(data['updatedAt']),
+      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      updatedAt: (data['updatedAt'] as Timestamp).toDate(),
     );
   }
 }

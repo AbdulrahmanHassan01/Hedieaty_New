@@ -1,12 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/user_model.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Auth state changes stream
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  // Sign in with email and password
   Future<UserCredential?> signInWithEmailAndPassword({
     required String email,
     required String password,
@@ -21,27 +22,45 @@ class AuthService {
     }
   }
 
-  // Register with email and password
   Future<UserCredential?> registerWithEmailAndPassword({
     required String email,
     required String password,
+    required String name,  // Add name parameter
   }) async {
     try {
-      return await _auth.createUserWithEmailAndPassword(
+      // Create auth user
+      final userCredential = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
+
+      // Create user document in Firestore
+      if (userCredential.user != null) {
+        final user = UserModel(
+          id: userCredential.user!.uid,
+          email: email,
+          name: name,
+          phoneNumber: '',  // Can be updated later
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        await _firestore
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .set(user.toFirestore());
+      }
+
+      return userCredential;
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
     }
   }
 
-  // Sign out
   Future<void> signOut() async {
     await _auth.signOut();
   }
 
-  // Handle Firebase Auth Exceptions
   String _handleAuthException(FirebaseAuthException e) {
     switch (e.code) {
       case 'user-not-found':
